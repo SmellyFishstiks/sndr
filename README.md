@@ -20,7 +20,8 @@ and then the library's API can let you play sound!
 
 
 Just require the file and it returns the API!
-**(And also call sndr.update in your update function, Very important!!)**
+(And also call sndr.update in your update function, Very important!!)
+
 Manual for the API
 ------------------
 (italicized if optional arg.)
