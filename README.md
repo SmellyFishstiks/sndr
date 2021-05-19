@@ -78,7 +78,7 @@ as a song.
 Flags (As in a table of custom keys.) let you set certain properties of the sfx,
 Here's a guide;
 ```lua
-sndr.load( sound, nil, {play=true, quit=false, loop=false, lock=false} )
+sndr.load( sound, nil, {play=true, quit=false, loop=false, lock=false, layer=0} )
 ```
 
 ---------------------------------------------------
@@ -93,6 +93,9 @@ sndr.load( sound, nil, {play=true, quit=false, loop=false, lock=false} )
  
  - lock
  will prevent a automaticly loaded sfx from overwriting it... I hope
+ 
+ - layer
+ used for giving a sfx or song a layer to use with volume.
 ---------------------------------------------------
 
 
@@ -119,18 +122,18 @@ just like play if it's a song will pause the whole song.
 
 
 
-vol [index]
+vol [index,layer]
 ===========
 Sets the global volume that applies to the channels.
-even amounts from 0..4, 0 being 0 and 4 being 1.
+*index* can be 0..5 0 being normal and 5 being super quiet.
 if index is **nil** will error.
+*layer* is used for saying "I want only layer 1 to be quiet and layer 0 to be loud." (0 is sfx by defualt and 1 is songs by defualt.)
 
 
 
-getVol {globalVolume}
+getVol [layer] {layerVolume}
 =====================
-Returns the global volume.
-(The normalized number; not the index.)
+Returns the layer's volume index
 
 
 
@@ -154,26 +157,24 @@ if channel[index] is **nil** errors.
 
 
 
-setSampler [table]
+setSampler [index, table]
 ==================
 Sets the sampler to the table,
 The sampler is the table pulled from by instrument 7,
 This lets you set it so you can use your own sounds in songs!
-The sampler loops on it's self and keep in mind that this is the global for all sfx so you may
-have to change it around or not. Example:
-```lua
- sndr.setSampler({ 0, .5, 1, .5, 1, 1.5, 0, 1.5, 0 })
-```
+The sampler follows the same rules as the sampler in Sounder,
+So you give it a *index* for which sound to replace and the *table* to replace it with.
 
 
 
 Ending Notes
 ------------
 ya that should be everything! IDK it's probably pretty
-flawed and also there's that bug where if you spamm sfx to much the music de-syncs a bit..
-But oh well.
+flawed and also there's also some bugs in there maybe...
 Don't think this will catch on as a audio format but for my little games and
 making simple music I think it's nice. any ways if you use this please credit it!
 
 Thanks for checking it out! - Smelly
 
+
+*updated for v1.1*
