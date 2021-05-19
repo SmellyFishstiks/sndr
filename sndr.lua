@@ -5,6 +5,11 @@
 -- check for required modules
 assert(love.math and love.audio and love.sound,"SNDR ERROR: The sndr library requires the following modules;\nlove.math, love.audio, and love.sound.\nPlease make sure those are supplied! .   o . ")
 
+-- vars that are useful for stuff
+local queCap=3
+local chunkRate=30
+local samplerate=44100
+local sampleChunkSize=samplerate/chunkRate
 
 -- base sndr table
 local sndr={
@@ -14,19 +19,20 @@ local sndr={
  
  seeder="?",
  synth={
-  sampler={0},
-  soundExport={}
+  sampler={},
+  soundExport={},
+  queSource=love.audio.newQueueableSource(samplerate, 8, 1, queCap),
+  soundSource=love.sound.newSoundData(math.floor(samplerate/chunkRate), samplerate, 8, 1),
+  globalVolume={}
  }
 }
+
 for i=1,sndr.channelAmount do
  sndr.synth.soundExport[i]=0
 end
 
 
--- vars that are useful for stuff
-local chunkRate=30
-local samplerate=44100
-local sampleChunkSize=samplerate/chunkRate
+
 
 -- update loop for lib
 local function update()
@@ -36,6 +42,7 @@ local function update()
    sndr.channel[i].age=sndr.channel[i].age+1
   end
  end
+ 
  
  sndr.soundMain()
  
@@ -98,16 +105,18 @@ local function SounderSynth(c,s,i,sConst)
  
  -- get data about song
  local data=s.data
- local datasize=#data/2-1
+ --local datasize=#data/2-1
  local speed=s.noteSpeed
  if s.id then speed=sndr.channel[1].noteSpeed end
  
  
  
  
- -- entire system that deals with if the song ends or what should happen.
+ local datasize=(#s.data)/2-1
+ 
+ 
+ 
  if i>datasize*samplerate/speed then
-  
   -- stop and reset
   if not s.flags.loop then
    
@@ -117,6 +126,7 @@ local function SounderSynth(c,s,i,sConst)
    else
     
     for i=1,sndr.channelAmount do
+     sndr.channel[1].state=false
      if sndr.channel[i] and sndr.channel[i].id then
       sndr.channel[i].source.bufferAdvance=0
      end
@@ -128,7 +138,7 @@ local function SounderSynth(c,s,i,sConst)
    
    if s.id then s=sndr.channel[1] end
    
-   local n = (s.chunksize*s.loopPoint) * (s.noteSpeed/samplerate)
+   local n = (s.chunksize*s.loopPoint) * (samplerate/s.noteSpeed)
    
    if not s.id then
     s.source.bufferAdvance=n
@@ -144,6 +154,9 @@ local function SounderSynth(c,s,i,sConst)
    
   end
   
+  
+  if s.flags.event then s.flags.event() end
+  
   -- quit
   if s.flags.quit then sndr.dump(c) end
   return false
@@ -152,17 +165,28 @@ local function SounderSynth(c,s,i,sConst)
  
  
  
+ -- get index and the right notes...
+ 
  
  
  local index=math.ceil( (i/((samplerate/speed)/60))/60 )
  
- local noteVolume= tonumber( string.sub( s.data,2 + index*2-1, 2 + index*2-1 ) )
- 
- local notePitch= readOneChar( string.sub( s.data,2 + index*2, 2 + index*2 ) )
  
  
+ local sv,sp=tonumber(string.sub(s.data, (index)*2+1, (index)*2+1)),
+             readOneChar(string.sub(s.data, (index)*2+2, (index)*2+2))
+ 
+ if sv and sp then s.source.bufferMemory={sv,sp} end
+ 
+ local noteVolume= sv or s.source.bufferMemory[1]
+ local notePitch= sp or s.source.bufferMemory[2]
  
  
+ 
+ assert( noteVolume and notePitch, "SNDR ERROR: pitch or Volume is broken durning playback, sorry! :<\n Pitch,Volume:"..tostring(notePitch)..", "..tostring(noteVolume))
+ 
+ assert(tonumber(sConst[1]),"SNDR ERROR: durning playback mode was nil?")
+ assert(tonumber(sConst[2]),"SNDR ERROR: durning playback instrument was nil?")
  
  sndr.seeder=c
  if s.id then sndr.seeder=1 end
@@ -170,15 +194,15 @@ local function SounderSynth(c,s,i,sConst)
  if sConst[2]==7 then notePitch={sndr.channel[c].noteSpeed,sConst[3],notePitch} end
 
  local n=0
- if notePitch~=0 or noteVolume~=0 then
-  n = sndr.synth.getInstrument(notePitch,i,sConst[2],s.scale)
+ if notePitch~=0 or  noteVolume~=0 then
+  --print(sndr.channel[c].pitchMOD)
+  n = sndr.synth.getInstrument(notePitch,i,sConst[2],s.scale,sndr.channel[c].pitchMOD)
  end
  
  
- n = sndr.synth.getMasterVolume(n,i,sConst[1],noteVolume,index,s.data,speed)
+ n = sndr.synth.getMasterVolume(n,i,sConst[1],noteVolume,index,s.data,speed,s.flags.layer)
  
- sndr.synth.soundExport[c]=n
- return n --math.sin( (6.2831853071 * (i/2) * 40 )/(samplerate/4) )
+ return n
 end
 
 
@@ -242,75 +266,85 @@ end
 
 
 -- helps get the sound!
-local function getInstrument(pitch,i,inst,scale)
+local function getInstrument(pitch,i,inst,scale,pitchMOD)
+ assert(sndr.synth.pitchTable[scale],"SNDR ERROR: Hey! The pitch scale used seems to be all messed up! ;p")
+ 
  if type(pitch)=="table" then
-  return sndr.synth.instrumentsTable[ inst+1](pitch,i-1,pitch[3] )
+  return sndr.synth.instrumentsTable[ inst+1](pitch,i-1,pitch[3],pitchMOD )
  end
- return sndr.synth.instrumentsTable[ inst+1](sndr.synth.pitchTable[scale][pitch],i-1,pitch )
+ return sndr.synth.instrumentsTable[ inst+1](sndr.synth.pitchTable[scale][pitch],i-1,pitch,pitchMOD )
 end
 
 
-
 -- empty instrument
-local function none(pitch,i)
+local function none()
  return 0
 end
 
 
 -- square
-local function square(pitch,i)
- return math.floor( math.sin( (6.2831853071 * (i) * pitch )/(samplerate/4) ))/16
+local function square(pitch,i,_,pitchMOD)
+ return math.floor( math.sin( (6.2831853071 * (i) * pitch )/(samplerate/pitchMOD) ))/3.5
 end
 
 
 -- accordion
-local function accordion(pitch,i)
- local n = math.sin( (6.2831853071 * (i) * pitch )/(samplerate/4) )
- return math.floor( ((n+.5)^2) )/16
+local function accordion(pitch,i,_,pitchMOD)
+ return math.floor( ((  math.sin( (6.2831853071 * (i) * pitch )/(samplerate/pitchMOD) )  +.5)^2) )/7
 end
 
 
 -- whistle
-local function whistle(pitch,i)
+local function whistle(pitch,i,_,pitchMOD)
  local n = i%2
  n=n/((n+64)/80)-n
- n=n + math.floor(math.sin( (6.2831853071 * (i-1) * pitch )/(samplerate/4)*8 )*8)/16
- return n/16
+ n=n + math.floor(math.sin( (6.2831853071 * (i-1) * pitch )/(samplerate/pitchMOD)*8 )*8)/16
+ return (n/3)/3.5
 end
 
+--error("work on the rest of the intruements later and the output for some reason sounds better when /2? IDK\nAnd then there's the whole ripout the sources thing and other stuff but that can wait a tiny bit if needed.")
 
 -- dinge
-local function dinge(pitch,i)
- local n=math.floor( math.sin( (6.2831853071 * (i) * pitch )/(samplerate/4) )+.5 )/16
+local function dinge(pitch,i,_,pitchMOD)
+ local n=math.floor( math.sin( (6.2831853071 * (i) * pitch )/(samplerate/pitchMOD) )+.5 )/4
  return n-noisegen(0,1)/256
 end
 
 
 -- noise
-local function noise(pitch,i,p)
- return -(noisegen(0,p)/(p*4))/4
+local function noise(pitch,i,p,pitchMOD)
+ return -(noisegen(0,p)/(p*4))/1.8
 end
 
 
 -- bubble
-local function bubble(pitch,i)
- local n=math.floor( (math.sin( (6.2831853071 * (i) * pitch )/(samplerate/4) )+.5 )*4)/16
- if math.sin( (6.2831853071 *(i/20)* pitch )/(samplerate/4)) < 0 then n=0 end
+local function bubble(pitch,i,_,pitchMOD)
+ local n=math.floor( (math.sin( (6.2831853071 * (i) * pitch )/(samplerate/pitchMOD) )+.5 )*4)/8
+ if math.sin( (6.2831853071 *(i/20)* pitch )/(samplerate/pitchMOD)) < 0 then n=0 end
  return n/2
 end
 
 
 -- sampler (use sndr.setSampler to use.)
 local function sampler(channelfInfo,i,p)
- i=i%((samplerate/channelfInfo[1])*channelfInfo[2])
- local n=math.floor(i/(p/4+1))+1
+ local sound=sndr.synth.sampler[p] or {{1,1,"no sound",0},{128}}
  
- if i>#sndr.synth.sampler-1 then
-  n=n%#sndr.synth.sampler+1
+ if sound[1][4]==0 then
+  i=i%((samplerate/channelfInfo[1])*channelfInfo[2])
+ elseif sound[1][4]==1 then
+  i=i%(samplerate/channelfInfo[1])
  end
-
  
- return sndr.synth.sampler[n]/16
+ local n=i+1
+ local compress=sound[1][2]
+ n=math.floor(n/compress+1)
+ 
+ if n>#sound[2] then
+  n=n%#sound[2]+1
+ end
+ 
+ local s=(sound[2][n]-128)/256
+ return s
 end
 
 
@@ -394,7 +428,7 @@ end
 
 
 
-local function getMasterVolume(n,i,mode,vol,index,data,speed)
+local function getMasterVolume(n,i,mode,vol,index,data,speed,layer)
  
  -- get fades which are tied to the modes
  n = fadeGet(n,i,index,mode,data,speed)
@@ -409,6 +443,12 @@ local function getMasterVolume(n,i,mode,vol,index,data,speed)
  }
  
  n=n *volumeTable[vol+1]
+ 
+ 
+ 
+ -- apply layer volumes
+ local vols={[0]=1,.75,.5,.25,.15,0}
+ n=n*vols[sndr.synth.globalVolume[layer] or 0]
  
  return n*2
 end
@@ -436,13 +476,34 @@ end
 
 -- adds the buffer table to a channel.
 local function bufferAdd(channel)
- local i=#sndr.buffer+1
- if #sndr.buffer>=sndr.channelAmount then
-  i=4
+ 
+ -- count
+ local c=0
+ for i=1,sndr.channelAmount do
+  if sndr.buffer[i] then c=c+1 end
+ end
+ 
+ -- find empty buffers
+ local i="?"
+ for j=1,sndr.channelAmount do
+  if not sndr.buffer[j] then
+   i=j
+   break
+  end
+ end
+ -- else find buffers that aren't songs,
+ -- since channel 1 durning songs is always a song and buffer shares the same amount it should never fail to find a non song channel.
+ if i=="?" then
+  for j=1,sndr.channelAmount do
+   if not sndr.buffer[j].id then
+    i=j
+    break
+   end
+  end
  end
  
  sndr.buffer[i]=channel
- 
+ sndr.buffer[i].age=0
 end
 
 
@@ -450,24 +511,32 @@ end
 -- The main update for checking the buffers.
 local function bufferMain()
  
+ local c=0
+ for i=1,sndr.channelAmount do
+  if sndr.buffer[i] then c=c+1 end
+ end
+ 
  -- if buffer isn't empty
- if #sndr.buffer~=0 then
+ if c~=0 then
   
   -- find empty channels
   for i=1,sndr.channelAmount do
    
    if not sndr.channel[i] then
-    
+    if sndr.buffer[1].id then
+     sndr.buffer[1].source.bufferAdvance=sndr.channel[1].source.bufferAdvance
+    end
     sndr.channel[i] = sndr.buffer[1]
+    
+    
     --cycle buffer channels
-    sndr.buffer[1]=nil
-    for i=2,#sndr.buffer do
+    for i=2,sndr.channelAmount do
      sndr.buffer[i-1]=sndr.buffer[i]
      sndr.buffer[i]=nil
     end
-    
-   end
    
+   
+   end
    
    
   end
@@ -486,12 +555,13 @@ local function bufferUpdate()
   if sndr.buffer[j] and sndr.buffer[j].state then
    
    local src=sndr.buffer[j]
-   for i=0,math.floor(sampleChunkSize/2)-1 do
+   --for i=0,math.floor(sampleChunkSize/2)-1 do
     
-    src.source.bufferAdvance=src.source.bufferAdvance+1
+    src.source.bufferAdvance=src.source.bufferAdvance+math.floor(sampleChunkSize/2)
     
     -- what to do with once it's done 
     local size = #src.data/2-1
+    
     if src.source.bufferAdvance>size*samplerate/src.noteSpeed then
      
      if not src.flags.loop then 
@@ -521,7 +591,7 @@ local function bufferUpdate()
    end
    
   
-  end
+  --end
  end
 end
 
@@ -531,9 +601,11 @@ end
 local function addSource()
  local t={
   
-  queSource = love.audio.newQueueableSource(samplerate, 8, 1, 2),
-  sourceBuffer = love.sound.newSoundData(math.floor(sampleChunkSize), samplerate, 8, 1),
-  bufferAdvance = 0
+  ---queSource = love.audio.newQueueableSource(samplerate, 8, 1, 2),
+  sourceBuffer = {},--love.sound.newSoundData(math.floor(sampleChunkSize), samplerate, 8, 1),
+  
+  bufferAdvance = 0,
+  bufferMemory = {}
  }
 
  return t
@@ -639,6 +711,11 @@ local function load(songdata,indexType,specialflags)
  if not specialflags then specialflags={} end
  if not indexType then indexType=#sndr.channel+1 if indexType>sndr.channelAmount then indexType=1 end end
  
+ 
+ if not songdata then error("SNDR ERROR: sfx data is nil?\nPlease make sure your loading the right thing!") end
+ 
+ if string.sub(songdata,1,1)~="~" then error("SNDR ERROR: Loaded sfx's data is outdated! please update it to 1.1+!\n. |____|  .") end
+  
  -- song sfxs ------
  if indexType=="song" then
   -- wipe old song
@@ -649,64 +726,106 @@ local function load(songdata,indexType,specialflags)
   
   
   
-  -- get number of channels in song
-  local p=tonumber( string.sub(songdata,1,2) )
-  if not p or p==0 then error("SNDR ERROR: Loaded sfx's name is invaild. please make sure it's proper! :o\nsoundData:\n"..songdata) end
-  local l=tonumber( string.sub(songdata,p+19,p+19) )
   
-  local c=tonumber(string.sub(songdata,p+6,p+8) ) * tonumber( string.sub(songdata,p+9,p+11)  )*2 +3
+  -- get name length
+  local p=tonumber( string.sub(songdata,3,4) )
+  
+  if not p or p==0 then error("SNDR ERROR: Loaded sfx's name is invaild. Please make sure it's proper! :o\nsoundData:\n"..songdata) end
+  
+  -- get number of channels in song
+  local l=tonumber( string.sub(songdata,p+22,p+22) )
+  --print(string.sub(songdata,p+22,p+22))
+  assert(l~=0,"SNDR ERROR: wait.. no channels? something is amdist!, (l "..l.." )")
+  
+  --size of the channel's data, due to compression c and d are used to get the datas by parseing.
+  local c,d=24+p,24+p
+  
   for i=1,l do
    
    local t={}
-   t.name=string.sub(songdata,3,2+p)
-   t.data= string.sub(songdata,p + 21 + c*(i-1),p + 21 + c*(i)-2 )
+   t.name=string.sub(songdata,5,4+p)
+   
+   
+   while string.sub(songdata,c,c)~="\n" and c~=#songdata do c=c+1 end
+   
+   
+   local data= string.sub(songdata,d,c )
+   t.data=""
+   local mc=""
+   local h=-1
+   while h<#data/2 do
+    h=h+1
+    local c=string.sub(data,h*2-1,h*2)
+    if string.sub(c,1,1)=="~" then
+     h=h-.5
+     c=mc
+    end
+    t.data=t.data..c
+    mc=c
+   end
+   
+   c=c+1
+   d=c
+   
+   --print(t.data)
+   
    t.id=true
    t.source=addSource()
    
-   t.chunksize = tonumber( string.sub(songdata,p+6,p+8) )
+   t.chunksize = tonumber( string.sub(songdata,p+8,p+10) )
    
-   t.scale = tonumber( string.sub(songdata,p+18,p+18) )
+   t.pitchMOD = tonumber( string.sub(songdata,p+20,p+20) )
    
-   t.noteSpeed=tonumber( string.sub(songdata,p+4,p+5) )
+   t.scale = tonumber( string.sub(songdata,p+21,p+21) )
+   
+   t.noteSpeed=tonumber( string.sub(songdata,p+6,p+7) )
    
    t.age=0
    
    if sndr.channel[i] then sndr.bufferAdd(sndr.channel[i]) end
    
+   specialflags.layer=specialflags.layer or 1
    t.flags=specialflags
    sndr.channel[i]=t
+   
+   
   end
+  
   -- important info thats stored in the first channel about the song
   sndr.channel[1].state=false
   if specialflags.play then sndr.channel[1].state=true if not sndr.synth.sfxseed then initmusicseed(1) end end
   sndr.channel[1].vol=1
   
   
-  local pos = tonumber( string.sub(songdata,1,2) ) + 12
+  local pos=tonumber( string.sub(songdata,3,4) ) + 14
   sndr.channel[1].startPoint= tonumber( string.sub(songdata,pos,pos+2) )
   pos=pos+3
   sndr.channel[1].loopPoint= tonumber( string.sub(songdata,pos,pos+2) )
   
-  
-  
-  --sndr.channel[1].noteSpeed=tonumber( string.sub(songdata,p+4,p+5) )
-  
   sndr.channel[1].flags.lock=true
   
- -- single sfx ------
+  
+  
+  
+ -- single sfx ------ ~~~!!!~~~
  else
   
-  -- find the oldest channel, works good enough.
+  -- find the oldest channel, works good enough. PS: maybe fix?
   local y=false
   if not indexType then
    indexType=1
   end
   
+  if indexType==1 and sndr.channel[1] and sndr.channel[1].id then indexType=2 end
+  
+  if not sndr.channel[indexType] then y=true end
+  
   for i=1,sndr.channelAmount do
    
-   if not sndr.channel[i] then
+   if not sndr.channel[i] and not y then
     y=true
     indexType=i
+    
     break
    end
    
@@ -714,7 +833,8 @@ local function load(songdata,indexType,specialflags)
   
   if not y then
    local n={}
-   for i=1,sndr.channelAmount do
+   for i=2,sndr.channelAmount do
+   -- i=sndr.channelAmount-i+1
     
     local b=0
     if sndr.channel[i] then b=sndr.channel[i].age end
@@ -723,41 +843,59 @@ local function load(songdata,indexType,specialflags)
    for i=2,sndr.channelAmount do
     for j=2,sndr.channelAmount do
      if n[i]<n[j] then
+      
       indexType=j
-      break
       
      end
      
     end
    end
   end
-  
+  --print(indexType)
   
   local t={}
-  local n=tonumber( string.sub(songdata,1,2) )
-  if not n or n==0 then error("SNDR ERROR: Loaded sfx's name is invaild, please make sure it's proper! :o\nsoundData:\n"..songdata) end
-  t.name=string.sub(songdata,3,2+n )
+  local p=tonumber( string.sub(songdata,3,4) )
+  if not p or p==0 then error("SNDR ERROR: Loaded sfx's name is invaild, please make sure it's proper! :o\nsoundData:\n"..songdata) end
+  t.name=string.sub(songdata,5,4+p )
   
-  local p=tonumber( string.sub(songdata,1,2) )
-  local c=tonumber(string.sub(songdata,p+6,p+8) ) * tonumber( string.sub(songdata,p+9,p+11)  )*2 +3
-  t.data=string.sub(songdata,p+21,p+19+c )
+  
+  -- read the dam data
+  data=string.sub(songdata,24+p,#songdata)
+  t.data=string.sub(data,1,2)
+  local mc=""
+  local i=1
+  while i<#data/2 do
+   i=i+1
+   local c=string.sub(data,i*2-1,i*2)
+   if string.sub(c,1,1)=="~" then
+    i=i-.5
+    c=mc
+   end
+   t.data=t.data..c
+   mc=c
+  end
+  
+  
+  
+  
   t.id=false
   t.state=false
   t.vol=1
   t.source=addSource()
-  t.noteSpeed=tonumber( string.sub(songdata,p+4,p+5) )
+  t.noteSpeed=tonumber( string.sub(songdata,p+6,p+7) )
   
   t.age=0
   
-  local pos = tonumber( string.sub(songdata,1,2) ) + 12
-  t.startPoint= tonumber( string.sub(songdata,pos,pos+2) )
-  pos=pos+3
-  t.loopPoint= tonumber( string.sub(songdata,pos,pos+2) )
+  t.startPoint= tonumber( string.sub(songdata,p+14,p+16) )
   
-  t.chunksize = tonumber( string.sub(songdata,p+6,p+8) )
+  t.loopPoint= tonumber( string.sub(songdata,p+17,p+19) )
   
-  t.scale = tonumber( string.sub(songdata,p+18,p+18) )
+  t.chunksize = tonumber( string.sub(songdata,p+8,p+10) )
   
+  t.pitchMOD = tonumber( string.sub(songdata,p+20,p+20) )
+  t.scale = tonumber( string.sub(songdata,p+21,p+21) )
+  
+  specialflags.layer=specialflags.layer or 0
   t.flags=specialflags
   
   if sndr.channel[indexType] then sndr.bufferAdd(sndr.channel[indexType]) end
@@ -843,29 +981,15 @@ end
 
 
 
--- set global volume from 0..1 in 4ths
-local function vol(index)
- local t={0.00,0.25,0.50,0.75,1}
- 
- local src="?"
- for i=1,sndr.channelAmount do
-  if sndr.channel[i] then
-   src=sndr.channel[i].source.queSource
-   src:setVolume(t[index+1])
-  end
- end
- 
+local function vol(index,layer)
+ sndr.synth.globalVolume[layer]=math.min(math.max(index,0),5)
 end
 
 
 
 -- gets global volume
-local function getVol()
- for i=1,sndr.channelAmount do
-  if sndr.channel[i] then
-   return sndr.channel[i].source.queSource:getVolume()
-  end
- end
+local function getVol(layer)
+ return sndr.synth.globalVolume[layer]
 end
 
 
@@ -904,7 +1028,6 @@ local function prog(channel,unit,index)
    end
    
   end
- 
  else
   
   scr.bufferAdvance=value
@@ -929,8 +1052,9 @@ end
 
 
 -- set the sampler here, used for the synth.
-local function setSampler(table)
- sndr.synth.sampler=table
+local function setSampler(index,table)
+ assert(type(index)=="number" and type(table)=="table","SNDR ERROR: Invalid data given to setSampler! `_ `")
+ sndr.synth.sampler[index]=table
 end
 
 
@@ -958,61 +1082,87 @@ end
 ]]
 
 
-
-
 local function soundMain()
-
- for i=1,sndr.channelAmount do
-  if sndr.channel[i] then
-   
+ 
+ 
+ while sndr.synth.queSource:getFreeBufferCount()>0 do
+  
+  -- for all channels
+  for i=1,sndr.channelAmount do
+   -- channel info
    local c=sndr.channel[i]
-   local src=c.source
-   
-   
-   if c and c.state or (c.id and sndr.channel[1].state) then
+   if c then
+    local src=c.source
     
-    
-    local n=""
-    while src.queSource:getFreeBufferCount()>0 do
+    -- if this channel is being played do;
+    if c.state or (c.id and sndr.channel[1].state) then
+     --if c.id then src.bufferAdvance=sndr.channel[1].source.bufferAdvance end
+     local sConst={
+      tonumber( string.sub( c.data, 1,1 ) ),
+      tonumber( string.sub( c.data, 2,2 ) ),
+      c.chunksize
+     }
      
-     local sConst={}
-     sConst[1]= tonumber( string.sub( sndr.channel[i].data, 1,1 ) )
-     sConst[2]= tonumber( string.sub( sndr.channel[i].data, 2,2 ) )
-     sConst[3]=sndr.channel[i].chunksize
-     
-     if c.id then src.bufferAdvance=sndr.channel[1].source.bufferAdvance end
-     
+     -- changed to just try to fill up 2 buffers worth of sounddata ahead of time used to be:
+     -- `while src.queSource:getFreeBufferCount()>0 do` because of the quesource!
+     local n="?"
+     local t,f={},true
+     sndr.synth.soundExport[i]=0
      for j=0,math.floor(sampleChunkSize)-1 do
+      -- index of what info to send to synth of course dummy.
+      local index=math.ceil( (src.bufferAdvance/((samplerate/c.noteSpeed)/60))/60 )
       src.bufferAdvance=src.bufferAdvance+1
+      
       -- get value, if it's the end of the sfx then break out.
-      n=SounderSynth(i,c,src.bufferAdvance,sConst)
+      n=SounderSynth(i,c,math.floor(src.bufferAdvance),sConst)
+      sndr.synth.soundExport[i]=sndr.synth.soundExport[i]+math.abs(tonumber(n) or 0)
+      if n~=0 then f=false end
       if not n then break end
-      src.sourceBuffer:setSample(j, n )
+      t[#t+1]=n
+      
      end
-     
-     
      if not n then break end
+     src.sourceBuffer={ t,f }
      
-     src.queSource:queue(src.sourceBuffer)
+     
+     
     end
-    
-    if not src.queSource:isPlaying() then
-     src.queSource:play()
-    end
-    
-    
-   elseif src.queSource:isPlaying() then
-    
-    src.queSource:stop()
     
    end
   end
   
+  
+  -- for all channels again to count up the sound datas are playing at once
+  local o=0
+  for i=1,sndr.channelAmount do
+   local c=sndr.channel[i]
+   if c then
+    if not c.source.sourceBuffer[2] then o=o+1 end
+   end
+  end
+  
+  -- get sound data ready
+  local f=false
+  for j=1,math.floor(sampleChunkSize) do
+   local sum=0
+   for i=1,sndr.channelAmount do
+    
+    if sndr.channel[i] and sndr.channel[i].source.sourceBuffer[1] then
+     f=true
+     sum=sum+sndr.channel[i].source.sourceBuffer[1][j]
+     
+    end
+   end
+   sndr.synth.soundSource:setSample(j-1,sum/math.max(o,1))
+   
+  end
+  
+  sndr.synth.queSource:queue(sndr.synth.soundSource)
+  sndr.synth.queSource:play()
  end
  
+ 
 end
-
-
 
 
 
