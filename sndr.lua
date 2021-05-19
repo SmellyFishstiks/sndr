@@ -433,7 +433,6 @@ local function getMasterVolume(n,i,mode,vol,index,data,speed,layer)
  -- get fades which are tied to the modes
  n = fadeGet(n,i,index,mode,data,speed)
  
- 
  local volumeTable={
   0.06,
   0.25,
