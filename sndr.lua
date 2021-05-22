@@ -522,7 +522,7 @@ local function bufferMain()
   for i=1,sndr.channelAmount do
    
    if not sndr.channel[i] then
-    if sndr.buffer[1].id then
+    if sndr.buffer[1] and sndr.buffer[1].id then
      sndr.buffer[1].source.bufferAdvance=sndr.channel[1].source.bufferAdvance
     end
     sndr.channel[i] = sndr.buffer[1]
