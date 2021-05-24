@@ -327,7 +327,7 @@ end
 
 -- sampler (use sndr.setSampler to use.)
 local function sampler(channelfInfo,i,p)
- local sound=sndr.synth.sampler[p] or {{1,1,"no sound",0},{128}}
+ local sound=sndr.synth.sampler[p] or {{1,1,"no sound",0,1},{128}}
  
  if sound[1][4]==0 then
   i=i%((samplerate/channelfInfo[1])*channelfInfo[2])
@@ -344,7 +344,7 @@ local function sampler(channelfInfo,i,p)
  end
  
  local s=(sound[2][n]-128)/256
- return s
+ return s/( math.max(math.abs(sound[1][5]),1) or 1)
 end
 
 
