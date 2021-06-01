@@ -344,7 +344,7 @@ local function sampler(channelfInfo,i,p)
  end
  
  local s=(sound[2][n]-128)/256
- return s/( math.max(math.abs(sound[1][5]),1) or 1)
+ return s/(math.max(math.abs(sound[1][5]),1) or 1)
 end
 
 
@@ -433,6 +433,7 @@ local function getMasterVolume(n,i,mode,vol,index,data,speed,layer)
  -- get fades which are tied to the modes
  n = fadeGet(n,i,index,mode,data,speed)
  
+ 
  local volumeTable={
   0.06,
   0.25,
@@ -502,6 +503,7 @@ local function bufferAdd(channel)
  end
  
  sndr.buffer[i]=channel
+ --sndr.buffer[i].prog=0
  sndr.buffer[i].age=0
 end
 
@@ -525,8 +527,8 @@ local function bufferMain()
     if sndr.buffer[1] and sndr.buffer[1].id then
      sndr.buffer[1].source.bufferAdvance=sndr.channel[1].source.bufferAdvance
     end
-    sndr.channel[i] = sndr.buffer[1]
     
+    sndr.channel[i] = sndr.buffer[1]
     
     --cycle buffer channels
     for i=2,sndr.channelAmount do
@@ -554,9 +556,8 @@ local function bufferUpdate()
   if sndr.buffer[j] and sndr.buffer[j].state then
    
    local src=sndr.buffer[j]
-   --for i=0,math.floor(sampleChunkSize/2)-1 do
     
-    src.source.bufferAdvance=src.source.bufferAdvance+math.floor(sampleChunkSize/2)
+    src.source.bufferAdvance=src.source.bufferAdvance+math.floor(sampleChunkSize)
     
     -- what to do with once it's done 
     local size = #src.data/2-1
@@ -589,9 +590,25 @@ local function bufferUpdate()
     
    end
    
-  
-  --end
  end
+ 
+ 
+ -- new code to sync music if it gets offset by being moved to the buffer.
+ local s=sndr.channel[1]
+ if not s or not s.id then return end
+ for i=2,sndr.channelAmount do
+  local n = s.source.bufferAdvance
+  if sndr.channel[i].id and sndr.channel[i].source.bufferAdvance~=n then
+   for j=2,sndr.channelAmount do
+    if sndr.channel[j] and sndr.channel[j].id then
+     sndr.channel[j].source.bufferAdvance=n
+    end
+   end
+   break
+  end
+ end
+ 
+ 
 end
 
 
