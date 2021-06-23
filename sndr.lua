@@ -1,5 +1,6 @@
 -- for use with Sounder
 -- by Smelly
+-- version 1.2
 
 
 -- check for required modules
@@ -195,8 +196,7 @@ local function SounderSynth(c,s,i,sConst)
 
  local n=0
  if notePitch~=0 or  noteVolume~=0 then
-  --print(sndr.channel[c].pitchMOD)
-  n = sndr.synth.getInstrument(notePitch,i,sConst[2],s.scale,sndr.channel[c].pitchMOD)
+  n = sndr.synth.getInstrument(notePitch,i,sConst[2],s.scale,sndr.channel[c].pitchMOD,c)
  end
  
  
@@ -266,13 +266,13 @@ end
 
 
 -- helps get the sound!
-local function getInstrument(pitch,i,inst,scale,pitchMOD)
+local function getInstrument(pitch,i,inst,scale,pitchMOD,c)
  assert(sndr.synth.pitchTable[scale],"SNDR ERROR: Hey! The pitch scale used seems to be all messed up! ;p")
  
  if type(pitch)=="table" then
-  return sndr.synth.instrumentsTable[ inst+1](pitch,i-1,pitch[3],pitchMOD )
+  return sndr.synth.instrumentsTable[ inst+1](pitch,i-1,pitch[3],pitchMOD,c )
  end
- return sndr.synth.instrumentsTable[ inst+1](sndr.synth.pitchTable[scale][pitch],i-1,pitch,pitchMOD )
+ return sndr.synth.instrumentsTable[ inst+1](sndr.synth.pitchTable[scale][pitch],i-1,pitch,pitchMOD,c )
 end
 
 
@@ -326,16 +326,11 @@ end
 
 
 -- sampler (use sndr.setSampler to use.)
-local function sampler(channelfInfo,i,p)
+local function sampler(channelfInfo,i,p,_,c)
  local sound=sndr.synth.sampler[p] or {{1,1,"no sound",0,1},{128}}
  
- if sound[1][4]==0 then
-  i=i%((samplerate/channelfInfo[1])*channelfInfo[2])
- elseif sound[1][4]==1 then
-  i=i%(samplerate/channelfInfo[1])
- end
+ local n=sndr.synth.sampleTime[c][i%math.floor(sampleChunkSize)+1]+1
  
- local n=i+1
  local compress=sound[1][2]
  n=math.floor(n/compress+1)
  
@@ -345,6 +340,7 @@ local function sampler(channelfInfo,i,p)
  
  local s=(sound[2][n]-128)/256
  return s/(math.max(math.abs(sound[1][5]),1) or 1)
+ 
 end
 
 
@@ -363,6 +359,42 @@ sndr.synth.instrumentsTable={
 
 
 
+sndr.synth.sampleTime={}
+local function getSamplerTimings(c,time)
+ 
+ sndr.synth.sampleTime[c]={}
+ local y=math.ceil((time+1)/(samplerate/sndr.channel[c].noteSpeed))
+ 
+ local p=readOneChar(string.sub(sndr.channel[c].data,y*2+2,y*2+2))
+ local sound=sndr.synth.sampler[p] or {{1,1,"no sound",1,1},{128}}
+ for k=1,math.floor(sampleChunkSize) do
+  local i=time+k
+  
+  if sound[1][4]==0 then
+   i=i%((samplerate/sndr.channel[c].noteSpeed)*sndr.channel[c].chunksize)
+  elseif sound[1][4]==1 then
+   i=i%(samplerate/sndr.channel[c].noteSpeed)
+  else
+   
+   local data=string.sub(sndr.channel[c].data,3,#sndr.channel[c].data-1)
+   local d=math.floor(i/ (samplerate/sndr.channel[c].noteSpeed))+1
+   
+   for j=0,d do
+    local l=d-j
+    -- check if it's the end of said thingy
+    if string.sub(data,l*2,l*2)~="" and string.sub(data,l*2,l*2)~=string.sub(data,d*2,d*2) then
+     
+     i=i-l*(samplerate/sndr.channel[c].noteSpeed)
+     break
+    end
+   end
+   
+  end
+  
+  sndr.synth.sampleTime[c][k]=i
+ end
+ 
+end
 
 
 local function fadeGet(n,i,index,mode,data,speed)
@@ -597,8 +629,9 @@ local function bufferUpdate()
  local s=sndr.channel[1]
  if not s or not s.id then return end
  for i=2,sndr.channelAmount do
+  
   local n = s.source.bufferAdvance
-  if sndr.channel[i].id and sndr.channel[i].source.bufferAdvance~=n then
+  if sndr.channel[i] and sndr.channel[i].id and sndr.channel[i].source.bufferAdvance~=n then
    for j=2,sndr.channelAmount do
     if sndr.channel[j] and sndr.channel[j].id then
      sndr.channel[j].source.bufferAdvance=n
@@ -750,7 +783,6 @@ local function load(songdata,indexType,specialflags)
   
   -- get number of channels in song
   local l=tonumber( string.sub(songdata,p+22,p+22) )
-  --print(string.sub(songdata,p+22,p+22))
   assert(l~=0,"SNDR ERROR: wait.. no channels? something is amdist!, (l "..l.." )")
   
   --size of the channel's data, due to compression c and d are used to get the datas by parseing.
@@ -782,8 +814,6 @@ local function load(songdata,indexType,specialflags)
    
    c=c+1
    d=c
-   
-   --print(t.data)
    
    t.id=true
    t.source=addSource()
@@ -867,7 +897,6 @@ local function load(songdata,indexType,specialflags)
     end
    end
   end
-  --print(indexType)
   
   local t={}
   local p=tonumber( string.sub(songdata,3,4) )
@@ -1119,8 +1148,12 @@ local function soundMain()
       c.chunksize
      }
      
-     -- changed to just try to fill up 2 buffers worth of sounddata ahead of time used to be:
-     -- `while src.queSource:getFreeBufferCount()>0 do` because of the quesource!
+    
+     local inst=string.sub(c.data,2,2)
+     if inst=="7" then
+      getSamplerTimings(i,src.bufferAdvance)
+     end
+     
      local n="?"
      local t,f={},true
      sndr.synth.soundExport[i]=0
@@ -1226,6 +1259,7 @@ sndr.bufferMain=bufferMain
 sndr.bufferUpdate=bufferUpdate
 
 sndr.synth.getInstrument=getInstrument
+sndr.synth.getSamplerTimings=getSamplerTimings
 sndr.synth.getMasterVolume=getMasterVolume
 
 sndr.soundMain=soundMain
