@@ -985,10 +985,12 @@ end
 
 -- plays the channel
 local function play(index)
-
+ initmusicseed(1)
+ 
  local sfx=sndr.channel[index]
  if not sfx then error("SNDR ERROR: Tried to play a channel that doesn't exist! ("..index..").") end
  if sfx.id then
+  
   for i=1,sndr.channelAmount do
    if sndr.channel[i] and sndr.channel[i].id then
     sndr.channel[i].state=true
