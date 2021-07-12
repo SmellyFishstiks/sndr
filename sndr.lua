@@ -20,6 +20,7 @@ local sndr={
  
  seeder="?",
  synth={
+  sfxseed="?",
   sampler={},
   soundExport={},
   queSource=love.audio.newQueueableSource(samplerate, 8, 1, queCap),
@@ -202,7 +203,7 @@ local function SounderSynth(c,s,i,sConst)
  
  n = sndr.synth.getMasterVolume(n,i,sConst[1],noteVolume,index,s.data,speed,s.flags.layer)
  
- return n
+ return n,{sv,sp}
 end
 
 
@@ -985,12 +986,12 @@ end
 
 -- plays the channel
 local function play(index)
+ 
  initmusicseed(1)
  
  local sfx=sndr.channel[index]
  if not sfx then error("SNDR ERROR: Tried to play a channel that doesn't exist! ("..index..").") end
  if sfx.id then
-  
   for i=1,sndr.channelAmount do
    if sndr.channel[i] and sndr.channel[i].id then
     sndr.channel[i].state=true
@@ -1157,7 +1158,7 @@ local function soundMain()
      end
      
      local n="?"
-     local t,f={},true
+     local t,f={},{}
      sndr.synth.soundExport[i]=0
      for j=0,math.floor(sampleChunkSize)-1 do
       -- index of what info to send to synth of course dummy.
@@ -1165,9 +1166,12 @@ local function soundMain()
       src.bufferAdvance=src.bufferAdvance+1
       
       -- get value, if it's the end of the sfx then break out.
-      n=SounderSynth(i,c,math.floor(src.bufferAdvance),sConst)
+      n,check=SounderSynth(i,c,math.floor(src.bufferAdvance),sConst)
       sndr.synth.soundExport[i]=sndr.synth.soundExport[i]+math.abs(tonumber(n) or 0)
-      if n~=0 then f=false end
+      
+      
+      
+      if check and check[2]~=0 then f[j+1]=true end
       if not n then break end
       t[#t+1]=n
       
@@ -1183,18 +1187,20 @@ local function soundMain()
   end
   
   
-  -- for all channels again to count up the sound datas are playing at once
-  local o=0
-  for i=1,sndr.channelAmount do
-   local c=sndr.channel[i]
-   if c then
-    if not c.source.sourceBuffer[2] then o=o+1 end
-   end
-  end
   
   -- get sound data ready
   local f=false
   for j=1,math.floor(sampleChunkSize) do
+   
+   -- for all channels again to count up the sound datas are playing at once (PER SAMPLE!)
+   local o=0
+   for k=1,sndr.channelAmount do
+    if sndr.channel[k] then
+     if sndr.channel[k].source.sourceBuffer[2][j] then o=o+1 end
+    end
+   end
+   
+   
    local sum=0
    for i=1,sndr.channelAmount do
     
@@ -1204,6 +1210,7 @@ local function soundMain()
      
     end
    end
+   
    sndr.synth.soundSource:setSample(j-1,sum/math.max(o,1))
    
   end
