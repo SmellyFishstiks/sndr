@@ -20,7 +20,7 @@ local sndr={
  
  seeder="?",
  synth={
-  sfxseed="?",
+  sfxseed=false,
   sampler={},
   soundExport={},
   queSource=love.audio.newQueueableSource(samplerate, 8, 1, queCap),
