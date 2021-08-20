@@ -9,8 +9,8 @@ assert(love.math and love.audio and love.sound,"SNDR ERROR: The sndr library req
 -- vars that are useful for stuff
 local queCap=3
 local chunkRate=30
-local samplerate=44100
-local sampleChunkSize=samplerate/chunkRate
+samplerate=44100
+sampleChunkSize=samplerate/chunkRate
 
 -- base sndr table
 local sndr={
@@ -25,12 +25,12 @@ local sndr={
   soundExport={},
   queSource=love.audio.newQueueableSource(samplerate, 8, 1, queCap),
   soundSource=love.sound.newSoundData(math.floor(samplerate/chunkRate), samplerate, 8, 1),
-  globalVolume={}
+  globalVolume={[0]=0,0}
  }
 }
 
 for i=1,sndr.channelAmount do
- sndr.synth.soundExport[i]=0
+ sndr.synth.soundExport[i]={}
 end
 
 
@@ -47,10 +47,9 @@ local function update()
  
  
  sndr.soundMain()
- 
  sndr.bufferMain()
- 
  sndr.bufferUpdate()
+ 
 end
 
 
@@ -137,19 +136,28 @@ local function SounderSynth(c,s,i,sConst)
    end
   -- loop
   else
+   loopNumber=loopNumber+1
    
    if s.id then s=sndr.channel[1] end
    
    local n = (s.chunksize*s.loopPoint) * (samplerate/s.noteSpeed)
    
+   
    if not s.id then
     s.source.bufferAdvance=n
+    if string.sub(s.data,2,2)=="7" then s.source.bufferAdvance=n-n%sampleChunkSize end
    else
     
     for i=1,sndr.channelAmount do
      if sndr.channel[i] and sndr.channel[i].id then
       sndr.channel[i].source.bufferAdvance=n
+      if string.sub(sndr.channel[i].data,2,2)=="7" then sndr.channel[i].source.bufferAdvance=n-n%sampleChunkSize end
      end
+    end
+    
+    if songDatas[songNumber][2]==-1 then
+     sndr.dump(1)
+     nextSong()
     end
     
    end
@@ -605,6 +613,8 @@ local function bufferUpdate()
        end
       else
        
+       print()
+       
        for i=1,sndr.channelAmount do
         if sndr.buffer[i] and sndr.buffer[i].id then
          sndr.buffer[i].source.bufferAdvance=0
@@ -636,6 +646,7 @@ local function bufferUpdate()
    for j=2,sndr.channelAmount do
     if sndr.channel[j] and sndr.channel[j].id then
      sndr.channel[j].source.bufferAdvance=n
+     if string.sub(sndr.channel[j].data,2,2)=="7" then sndr.channel[j].source.bufferAdvance=n-n%sampleChunkSize end
     end
    end
    break
@@ -1144,7 +1155,7 @@ local function soundMain()
     
     -- if this channel is being played do;
     if c.state or (c.id and sndr.channel[1].state) then
-     --if c.id then src.bufferAdvance=sndr.channel[1].source.bufferAdvance end
+     
      local sConst={
       tonumber( string.sub( c.data, 1,1 ) ),
       tonumber( string.sub( c.data, 2,2 ) ),
@@ -1159,7 +1170,7 @@ local function soundMain()
      
      local n="?"
      local t,f={},{}
-     sndr.synth.soundExport[i]=0
+     
      for j=0,math.floor(sampleChunkSize)-1 do
       -- index of what info to send to synth of course dummy.
       local index=math.ceil( (src.bufferAdvance/((samplerate/c.noteSpeed)/60))/60 )
@@ -1167,20 +1178,19 @@ local function soundMain()
       
       -- get value, if it's the end of the sfx then break out.
       n,check=SounderSynth(i,c,math.floor(src.bufferAdvance),sConst)
-      sndr.synth.soundExport[i]=sndr.synth.soundExport[i]+math.abs(tonumber(n) or 0)
-      
-      
+      --sndr.synth.soundExport[i]=sndr.synth.soundExport[i]+math.abs(tonumber(n) or 0)
       
       if check and check[2]~=0 then f[j+1]=true end
       if not n then break end
       t[#t+1]=n
+     end
+     
+     -- used to break if not n, that broke if the next channel wasn't dead but 1 before was
+     if n then
+      src.sourceBuffer={ t,f }
+      sndr.synth.soundExport[i]=t
       
      end
-     if not n then break end
-     src.sourceBuffer={ t,f }
-     
-     
-     
     end
     
    end
@@ -1196,7 +1206,11 @@ local function soundMain()
    local o=0
    for k=1,sndr.channelAmount do
     if sndr.channel[k] then
-     if sndr.channel[k].source.sourceBuffer[2][j] then o=o+1 end
+     
+     if sndr.channel[k].source.sourceBuffer[2] then
+      if sndr.channel[k].source.sourceBuffer[2][j] then o=o+1 end
+     end
+     
     end
    end
    
@@ -1214,9 +1228,15 @@ local function soundMain()
    sndr.synth.soundSource:setSample(j-1,sum/math.max(o,1))
    
   end
+   
+   recordingCapture[#recordingCapture+1]={}
+   for i=1,sampleChunkSize do
+    recordingCapture[#recordingCapture][i]=sndr.synth.soundSource:getSample(i-1)
+   end
+   
+   sndr.synth.queSource:queue(sndr.synth.soundSource)
+   sndr.synth.queSource:play()
   
-  sndr.synth.queSource:queue(sndr.synth.soundSource)
-  sndr.synth.queSource:play()
  end
  
  
@@ -1272,5 +1292,7 @@ sndr.synth.getSamplerTimings=getSamplerTimings
 sndr.synth.getMasterVolume=getMasterVolume
 
 sndr.soundMain=soundMain
+
+sndr.readOneChar=readOneChar
 
 return sndr
