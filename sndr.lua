@@ -136,7 +136,6 @@ local function SounderSynth(c,s,i,sConst)
    end
   -- loop
   else
-   loopNumber=loopNumber+1
    
    if s.id then s=sndr.channel[1] end
    
@@ -155,10 +154,6 @@ local function SounderSynth(c,s,i,sConst)
      end
     end
     
-    if songDatas[songNumber][2]==-1 then
-     sndr.dump(1)
-     nextSong()
-    end
     
    end
    
