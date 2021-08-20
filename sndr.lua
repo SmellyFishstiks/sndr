@@ -9,8 +9,8 @@ assert(love.math and love.audio and love.sound,"SNDR ERROR: The sndr library req
 -- vars that are useful for stuff
 local queCap=3
 local chunkRate=30
-samplerate=44100
-sampleChunkSize=samplerate/chunkRate
+local samplerate=44100
+local sampleChunkSize=samplerate/chunkRate
 
 -- base sndr table
 local sndr={
@@ -612,8 +612,6 @@ local function bufferUpdate()
         src.source.bufferAdvance=0 return
        end
       else
-       
-       print()
        
        for i=1,sndr.channelAmount do
         if sndr.buffer[i] and sndr.buffer[i].id then
@@ -1228,11 +1226,6 @@ local function soundMain()
    sndr.synth.soundSource:setSample(j-1,sum/math.max(o,1))
    
   end
-   
-   recordingCapture[#recordingCapture+1]={}
-   for i=1,sampleChunkSize do
-    recordingCapture[#recordingCapture][i]=sndr.synth.soundSource:getSample(i-1)
-   end
    
    sndr.synth.queSource:queue(sndr.synth.soundSource)
    sndr.synth.queSource:play()
