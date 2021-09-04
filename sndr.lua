@@ -1170,6 +1170,7 @@ local function soundMain()
       src.bufferAdvance=src.bufferAdvance+1
       
       -- get value, if it's the end of the sfx then break out.
+      local check
       n,check=SounderSynth(i,c,math.floor(src.bufferAdvance),sConst)
       --sndr.synth.soundExport[i]=sndr.synth.soundExport[i]+math.abs(tonumber(n) or 0)
       
