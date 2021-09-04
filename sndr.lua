@@ -910,7 +910,7 @@ local function load(songdata,indexType,specialflags)
   
   
   -- read the dam data
-  data=string.sub(songdata,24+p,#songdata)
+  local data=string.sub(songdata,24+p,#songdata)
   t.data=string.sub(data,1,2)
   local mc=""
   local i=1
