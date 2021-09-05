@@ -1111,6 +1111,37 @@ end
 
 
 
+-- make a sampleTable out of a file.
+local function readSampleFile(data)
+ local sampleTable={}
+ 
+ -- header
+ sampleTable[1] = {
+  tonumber( string.byte( string.sub(data,1,1) ) ),
+  tonumber( string.byte( string.sub(data,2,2) ) ),
+ }
+ local size = tonumber( string.byte( string.sub(data,3,3) ) )
+ sampleTable[1][3] = string.sub(data,4,4+size)
+ sampleTable[1][4] = tonumber( string.byte( string.sub(data,size+4,size+4) ) )
+ sampleTable[1][5] = tonumber( string.byte( string.sub(data,size+5,size+5) ) )
+ 
+ -- data
+ sampleTable[2] = {}
+ for i=size+6,#data do
+  sampleTable[2][i-size-5] = tonumber( string.byte( string.sub(data,i,i) ) )
+ end
+ 
+ return sampleTable
+end
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1271,6 +1302,7 @@ sndr.prog=prog
 sndr.getProg=getProg
 
 sndr.setSampler=setSampler
+sndr.readSampleFile=readSampleFile
 
 sndr.bufferAdd=bufferAdd
 sndr.bufferMain=bufferMain
