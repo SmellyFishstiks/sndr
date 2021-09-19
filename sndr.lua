@@ -1314,6 +1314,4 @@ sndr.synth.getMasterVolume=getMasterVolume
 
 sndr.soundMain=soundMain
 
-sndr.readOneChar=readOneChar
-
 return sndr
