@@ -1130,7 +1130,7 @@ local function readSampleFile(data)
   tonumber( string.byte( string.sub(data,2,2) ) ),
  }
  local size = tonumber( string.byte( string.sub(data,3,3) ) )
- sampleTable[1][3] = string.sub(data,4,4+size)
+ sampleTable[1][3] = string.sub(data,4,4+size-1)
  sampleTable[1][4] = tonumber( string.byte( string.sub(data,size+4,size+4) ) )
  sampleTable[1][5] = tonumber( string.byte( string.sub(data,size+5,size+5) ) )
  
