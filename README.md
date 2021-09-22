@@ -158,12 +158,41 @@ if channel[index] is **nil** errors.
 
 
 setSampler [index, table]
-==================
+=========================
 Sets the sampler to the table,
 The sampler is the table pulled from by instrument 7,
 This lets you set it so you can use your own sounds in songs!
 The sampler follows the same rules as the sampler in Sounder,
 So you give it a *index* for which sound to replace and the *table* to replace it with.
+
+
+
+function readSampleFile(data)
+==============================
+Takes a sample file, (A string) And returns a sample to shove into the sampler with setSampler.
+Keep in mind data has to be raw and the header needs a size amount for the name before and the such.
+
+
+
+Sampling Guide
+--------------
+Here I'm just going to lay out what the different values do and everything you need to know to make your own samples.
+
+A sample in sounder is a table inside the sndr.synth.sampler. and inside are 2 more tables the data table,
+### Header Data
+This stores the needed data about how to use the sound; in order:
+
+---------------------------------------------------
+- BitRate: The amount of bits per sample, (1 for 8bit for example 2 for 16bit etc... Not sure if this works properly?, Just use 1 in doubt.)
+- Compression: the rate it's compressed by, 1 is normal, 2 is 2x etc.
+- Name: name of sample
+- LoopingMode: how it should treat looping (0=Loop based on chunksize, 1=Loop based on noteside, 2=Loop based on proggress of the sampler in the channel, 3=don't loop more than once per note.) (2 is pretty good for instruments, 3 is useful for bass.. 0,1 are odd.)
+- VolumeModifer: just a number to dampen a sound if you want, 1 to ignore.
+---------------------------------------------------
+
+### Sample Data
+and then the 2nd table is just the data to read for the sample, in the case of 8bit just 0..255.
+You can use readSampleFile to just get a sample with a header and data from a file though if you want to write those and just ignore all of this.
 
 
 
@@ -177,5 +206,5 @@ making simple music I think it's nice. any ways if you use this please credit it
 Thanks for checking it out! - Smelly
 
 
-*updated for v1.1*
+*updated for v1.2 hotfix 11*
 
