@@ -333,7 +333,7 @@ end
 local function sampler(channelfInfo,i,p,_,c)
  local sound=sndr.synth.sampler[p] or {{1,1,"no sound",0,1},{128}}
  
- local n=sndr.synth.sampleTime[c][i%math.floor(sampleChunkSize)+1]+1
+ local n= ( sndr.synth.sampleTime[c][i%math.floor(sampleChunkSize)+1] or 127)+1
  
  local compress=sound[1][2]
  n=math.floor(n/compress+1)
@@ -376,9 +376,11 @@ local function getSamplerTimings(c,time)
   
   if sound[1][4]==0 then
    i=i%((samplerate/sndr.channel[c].noteSpeed)*sndr.channel[c].chunksize)
+   
   elseif sound[1][4]==1 then
    i=i%(samplerate/sndr.channel[c].noteSpeed)
-  else
+   
+  elseif sound[1][4]==2 then
    
    local data=string.sub(sndr.channel[c].data,3,#sndr.channel[c].data-1)
    local d=math.floor(i/ (samplerate/sndr.channel[c].noteSpeed))+1
@@ -393,6 +395,13 @@ local function getSamplerTimings(c,time)
     end
    end
    
+  elseif sound[1][4]==3 then
+   
+   i=i%(samplerate/sndr.channel[c].noteSpeed)
+   --i=math.min(i,#sound[2])
+   if i>#sound[2] then i=false end
+  else
+   error("SNDR ERROR: sampler ("..p..", "..sound[1][3].. ") looping mode is invaild!")
   end
   
   sndr.synth.sampleTime[c][k]=i
