@@ -395,7 +395,7 @@ local function getSamplerTimings(c,time)
    end
    
   elseif sound[1][4]==3 then
-   ---error("Remember to add 4th sampler mode that's like 2 but with cutoff of 3...\n also make sure it's not jank before pushing to git.")
+   
    i=i%(samplerate/sndr.channel[c].noteSpeed)
    --i=math.min(i,#sound[2])
    if i>#sound[2] then i=false end
