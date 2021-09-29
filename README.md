@@ -186,7 +186,7 @@ This stores the needed data about how to use the sound; in order:
 - BitRate: The amount of bits per sample, (1 for 8bit for example 2 for 16bit etc... Not sure if this works properly?, Just use 1 in doubt.)
 - Compression: the rate it's compressed by, 1 is normal, 2 is 2x etc.
 - Name: name of sample
-- LoopingMode: how it should treat looping (0=Loop based on chunksize, 1=Loop based on noteside, 2=Loop based on proggress of the sampler in the channel, 3=don't loop more than once per note.) (2 is pretty good for instruments, 3 is useful for bass.. 0,1 are odd.)
+- LoopingMode: how it should treat looping (0=Loop based on chunksize, 1=Loop based on noteside, 2=Loop based on proggress of the sampler in the channel, 3=don't loop more than once per note, 4=2 + the cutoff of 3 when done.) (2 is pretty good for instruments, 3 is useful for bass.. 0,1 are odd.)
 - VolumeModifer: just a number to dampen a sound if you want, 1 to ignore.
 ---------------------------------------------------
 
@@ -206,5 +206,5 @@ making simple music I think it's nice. any ways if you use this please credit it
 Thanks for checking it out! - Smelly
 
 
-*updated for v1.2 hotfix 11*
+*updated for v1.2 hotfix 14*
 
